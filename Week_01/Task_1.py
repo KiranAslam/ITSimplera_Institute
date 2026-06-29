@@ -9,13 +9,11 @@ plt.rcParams['figure.figsize'] = (10, 6)
 
 # 1. LOAD THE DATASET & DISPLAY BASIC INFO
 
-dataset = pd.read_excel("Data/online_retail_II.xlsx")
-print("Loading data... (This might take a minute due to file size)")
+file_path = "Data/online_retail_II.xlsx"
+print("Loading data...")
 
-# Loading both sheets to get the full 2009-2011 duration requested
-
-df1 = pd.read_excel(dataset, sheet_name="Year 2009-2010")
-df2 = pd.read_excel(dataset, sheet_name="Year 2010-2011")
+df1 = pd.read_excel(file_path, sheet_name="Year 2009-2010")
+df2 = pd.read_excel(file_path, sheet_name="Year 2010-2011")
 df = pd.concat([df1, df2], ignore_index=True)
 
 print("\n--- Basic Information ---")
