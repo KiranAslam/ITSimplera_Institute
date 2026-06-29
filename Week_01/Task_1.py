@@ -6,14 +6,11 @@ import seaborn as sns
 # Set plotting style for clean visuals
 sns.set_theme(style="whitegrid")
 plt.rcParams['figure.figsize'] = (10, 6)
-
 # -------------------------------------------------------------------------
 # 1. LOAD THE DATASET & DISPLAY BASIC INFO
 # -------------------------------------------------------------------------
 # Note: The Online Retail II dataset contains two sheets (Year 2009-2010 and Year 2010-2011).
 # For a thorough analysis, we can load and combine them, or focus on one. 
-
-
 
 dataset = pd.read_excel("Data/online_retail_II.xlsx")
 print("Loading data... (This might take a minute due to file size)")
