@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Predict — Steel Energy Predictor</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  {% include "_nav.html" %}
+
+  <div class="container">
+    <div class="card">
+      <h1>Real-Time Energy Consumption Prediction</h1>
+      <p class="lead">
+        Enter the current sensor readings below. The Random Forest pipeline
+        (trained in Week 2, redeployed here) will predict <code>Usage_kWh</code>.
+      </p>
+
+      <form action="/predict" method="post">
+        <div class="two-col">
+          {% for field_name, feature_key, label in raw_numeric_fields %}
+          <div>
+            <label for="{{ field_name }}">{{ label }}</label>
+            <input
+              type="number"
+              step="any"
+              id="{{ field_name }}"
+              name="{{ field_name }}"
+              required
+              value="{{ submitted[feature_key] if submitted is defined and submitted else '' }}"
+            >
+            {% if feature_key in numeric_ranges %}
+            <div class="hint">
+              Typical range: {{ "%.2f"|format(numeric_ranges[feature_key][0]) }}
+              – {{ "%.2f"|format(numeric_ranges[feature_key][1]) }}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+
+          <div>
+            <label for="load_type">Load Type</label>
+            <select id="load_type" name="load_type" required>
+              {% for lt in load_types %}
+              <option value="{{ lt }}">{{ lt }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="day_of_week">Day of Week</label>
+            <select id="day_of_week" name="day_of_week" required>
+              {% for d in days %}
+              <option value="{{ d }}">{{ d }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <button class="submit-btn" type="submit">Predict Usage (kWh)</button>
+      </form>
+
+      {% if prediction is not none %}
+      <div class="result-box">
+        Predicted Energy Consumption: <strong>{{ prediction }} kWh</strong>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

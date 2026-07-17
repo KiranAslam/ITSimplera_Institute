@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Steel Industry Energy Predictor</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  {% include "_nav.html" %}
+
+  <div class="container">
+    <div class="card">
+      <span class="badge">Week 3 — PCA + FastAPI Deployment</span>
+      <h1>Steel Industry Energy Consumption Predictor</h1>
+      <p class="lead">
+        This app is built on top of the Week 2 machine learning pipeline
+        trained on the UCI Steel Industry Energy Consumption dataset.
+        A Random Forest Regressor predicts <code>Usage_kWh</code> from
+        electrical readings (reactive power, power factor, CO2), load type,
+        and calendar features (hour, day of week, month).
+      </p>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>📊 Dashboard</h2>
+        <p>Explore exploratory data analysis charts: energy usage by hour,
+          by load type, and the correlation between numeric features.</p>
+        <a href="/dashboard">Go to Dashboard →</a>
+      </div>
+      <div class="card">
+        <h2>🔮 Prediction</h2>
+        <p>Enter live sensor readings and get a real-time energy
+          consumption prediction from the trained model.</p>
+        <a href="/predict">Go to Prediction →</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

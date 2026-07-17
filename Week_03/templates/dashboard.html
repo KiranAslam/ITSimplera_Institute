@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard — Steel Energy Predictor</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+      <h1>PCA Analysis Dashboard</h1>
+      <p class="lead">Key patterns found in the Dimensionality Reduction (PCA) process.</p>
+    </div>
+
+    <!-- Chart 1: Cumulative Variance -->
+    <div class="card">
+      <h2>Cumulative Explained Variance</h2>
+      <p>This plot shows how much information (variance) is retained as we add more PCA components.</p>
+      <img class="chart-img" src="/static/images/cumulative_variance.png" alt="Cumulative Explained Variance">
+    </div>
+
+    <!-- Chart 2: PCA Loading Heatmap -->
+    <div class="card">
+      <h2>PCA Loading Heatmap</h2>
+      <p>This heatmap shows the relationship and weight of each original feature on our principal components.</p>
+      <img class="chart-img" src="/static/images/pca_loading_heatmap.png" alt="PCA Loading Heatmap">
+    </div>
+
+    <!-- Chart 3: Scree Plot -->
+    <div class="card">
+      <h2>Scree Plot</h2>
+      <p>Used to visualize the eigenvalues of each component to determine the optimal number of dimensions to keep.</p>
+      <img class="chart-img" src="/static/images/scree_plot.png" alt="Scree Plot">
+    </div>
+</div>
+
+</body>
+</html>
