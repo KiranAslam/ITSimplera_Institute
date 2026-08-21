@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+myenv/
+env/
+.myenv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Raw datasets (large, downloaded separately per README instructions)
+datasets/
+
+# YOLO/Ultralytics training run outputs (large; only models/best.pt is committed)
+runs/
+*.cache
+
+# Flask runtime logs (auto-generated; keep the logs/ folder itself via .gitkeep)
+logs/*.csv
+
+# LaTeX build artifacts (keep paper.tex and paper.pdf, ignore the rest)
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.toc
+paper/*.synctex.gz
+paper/*.fls
+paper/*.fdb_latexmk
+
+# OS / editor junk
+.DS_Store
+Thumbs.db

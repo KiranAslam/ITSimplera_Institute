@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>PPE Compliance Dashboard</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <header>
+    <h1>PPE Compliance Detection Dashboard</h1>
+    <p class="subtitle">Live webcam &middot; YOLOv8 + ByteTrack</p>
+  </header>
+
+  <main>
+    <section class="video-panel">
+      <img src="{{ url_for('video_feed') }}" alt="Live detection feed" />
+    </section>
+
+    <section class="side-panel">
+      <div class="stats-cards" id="stats-cards">
+        <div class="card">
+          <span class="card-value" id="stat-people">0</span>
+          <span class="card-label">People Tracked</span>
+        </div>
+        <div class="card card-alert">
+          <span class="card-value" id="stat-violations">0</span>
+          <span class="card-label">Violations Logged</span>
+        </div>
+      </div>
+
+      <div class="breakdown">
+        <h3>Violations by Class</h3>
+        <ul id="violation-breakdown"></ul>
+      </div>
+
+      <div class="log-panel">
+        <h3>Violation Log</h3>
+        <table id="log-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Track ID</th>
+              <th>Violation</th>
+              <th>Conf</th>
+            </tr>
+          </thead>
+          <tbody id="log-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
