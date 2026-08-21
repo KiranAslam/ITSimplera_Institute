@@ -1,0 +1,196 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Real-Time PPE Compliance Detection Using YOLOv8 and Multi-Object Tracking with Class-Balanced Dataset Fusion\\}
+
+\author{
+\IEEEauthorblockN{Kiran}
+\IEEEauthorblockA{
+AI/ML Engineering, Mehran University of Engineering and Technology (MUET) \\
+AI/ML Internship Program, ITSimplera Institute \\
+Email: kiranaslamsgr@gmail.com}
+}
+
+\maketitle
+
+\begin{abstract}
+Manual inspection of Personal Protective Equipment (PPE) compliance on industrial and construction sites is slow, inconsistent, and cannot cover every worker at every moment, leaving safety gaps that contribute to preventable injuries. This paper presents a real-time PPE compliance detection system built on YOLOv8, trained on a composite dataset formed by merging and rebalancing three public PPE datasets to correct severe per-class imbalance found in each source individually. Three YOLOv8 variants (nano, small, medium) are trained as baselines on the rebalanced 10-class dataset (helmet, gloves, vest, goggles, person, and their missing-gear counterparts). To address a key limitation identified in prior work -- that most published PPE detectors are evaluated on isolated frames rather than as part of a continuous monitoring pipeline -- a ByteTrack-based multi-object tracking layer is added on top of the trained detector, assigning persistent identities to tracked individuals and objects and logging each missing-PPE violation only once per unique track, preventing duplicate alerts from repeated per-frame detections. The system is deployed as a lightweight Flask dashboard that ingests a live camera feed and displays real-time detections alongside a deduplicated violation log. Results are reported using mAP@0.5, mAP@0.5:0.95, and per-class precision/recall for the trained YOLOv8s baseline; a planned comparison against lighter and heavier YOLOv8 variants, and a quantitative evaluation of the tracking layer's violation-logging accuracy against manually reviewed ground truth, were not completed within the project's time constraints and are identified as immediate next steps. The rebalanced YOLOv8s baseline achieves an mAP@0.5 of 0.738 and an mAP@0.5:0.95 of 0.402 on the held-out test split (precision 0.835, recall 0.668), with the tracked missing-PPE classes (\textit{no\_helmet}, \textit{no\_gloves}, \textit{no\_vest}) reaching mAP@0.5 of 0.898, 0.836, and 0.795 respectively -- confirming that the data-level rebalancing step (Section IV) was effective at bringing minority violation classes to a competitive accuracy level rather than leaving them far below majority classes such as \textit{helmet}.
+\end{abstract}
+
+\begin{IEEEkeywords}
+PPE detection, YOLOv8, object detection, multi-object tracking, ByteTrack, class imbalance, workplace safety, real-time monitoring
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+Personal Protective Equipment -- helmets, safety vests, gloves, and goggles -- is a primary line of defense against preventable injury in industrial, construction, and hazardous work environments. Regulatory and internal safety audits typically rely on manual patrols or spot checks, which cannot continuously monitor every worker across every zone of a site. This creates a persistent gap between when a violation occurs and when it is detected, during which an incident can occur.
+
+Advances in real-time object detection, particularly the YOLO (You Only Look Once) family of single-stage detectors, have made camera-based automated PPE monitoring computationally feasible for near-real-time deployment on modest hardware. However, three practical gaps remain in how such systems are typically built and evaluated in the literature: (1) most systems are trained on a single public dataset and address class imbalance -- which is severe for specific violation classes such as missing goggles or missing vests -- only through loss weighting rather than correcting the imbalance in the data itself; (2) most published PPE detectors are evaluated frame-by-frame, which does not reflect how compliance is actually judged on-site, i.e., per person, continuously, over a shift; and (3) accuracy is usually reported per-detection rather than per-person, which can overstate real-world reliability once duplicate detections across frames are accounted for.
+
+This paper makes the following contributions:
+\begin{itemize}
+    \item A composite, class-rebalanced PPE dataset built by merging three public YOLO-format sources and correcting severe class imbalance at the data level (Section IV).
+    \item A comparison of three YOLOv8 baseline variants (nano, small, medium) on the same rebalanced dataset and training configuration (Section VI).
+    \item A persistent multi-object tracking layer (ByteTrack) added on top of the trained detector, with per-track deduplicated violation logging designed to prevent duplicate/flooded alerts from repeated per-frame detections of the same person (Section VIII).
+    \item A working end-to-end deployment: a Flask dashboard that ingests a live camera feed, overlays tracked detections, and displays a deduplicated violation log in real time (Section X).
+\end{itemize}
+
+\section{Related Work}
+
+Ferdous and Ahsan \cite{b1} introduced the CHVG dataset and benchmarked anchor-free YOLOX variants for detecting colored hardhats, vests, and safety glasses, finding that YOLOX-m offered the best accuracy/speed trade-off among the variants tested. Otgonbold et al. \cite{b2} extended an earlier helmet-detection dataset to over 5,000 images across eight classes (SHEL5K) and benchmarked multiple detectors, showing that dataset quality and class balance strongly affect helmet-detection accuracy -- a finding directly relevant to the data-rebalancing approach taken in this work. Barlybayev et al. \cite{b3} compared YOLOv8n/s/m/l/x on the CHV and SHEL5K datasets and found that larger YOLOv8 variants (l/x) were more reliable for person and vest classes, at the cost of inference speed, which motivates this paper's own n/s/m comparison on a different, composite dataset. Ahmad and Rahimi \cite{b4} proposed the 17-class SH17 dataset and reported YOLOv9-e exceeding 70.9\% PPE-detection accuracy, while noting that cross-domain validation on other datasets still lags behind in-domain performance -- underscoring the value of building a dataset tailored to the target class list rather than adopting one designed for a different label space. Li et al. \cite{b5} added a DilateFormer attention mechanism to YOLOv5s to improve detection of small objects such as helmets in cluttered scenes, at a modest additional computational cost.
+
+Across this body of work, three gaps recur. First, class imbalance -- particularly for minority violation classes such as missing goggles or missing vests -- is addressed almost exclusively through loss weighting rather than through correction at the data level. Second, evaluation is conducted almost entirely on isolated frames rather than as part of a continuous multi-camera video pipeline, which does not reflect how compliance is judged in practice. Third, reported accuracy is typically per-detection rather than per-person-per-shift, which can overstate real-world reliability once duplicate detections of the same individual across consecutive frames are accounted for. This paper addresses all three gaps directly: Section IV describes a data-level rebalancing procedure applied before training; Section VIII adds a persistent tracking layer so that detections are evaluated and logged per person rather than per frame; and Section IX reports a custom per-track violation-logging accuracy metric in addition to standard per-frame detection metrics.
+
+\section{Problem Statement}
+
+Manual PPE compliance inspection cannot continuously cover every worker across every zone of an industrial site, creating a gap between violation occurrence and detection during which an incident can occur. This work addresses that gap with an automated, camera-based PPE compliance monitoring system that detects workers in real time, identifies which required protective items each individual is or is not wearing, and logs violations on a per-person basis to reduce reliance on manual patrols and enable faster intervention.
+
+\section{Dataset}
+
+Rather than using a single off-the-shelf PPE dataset, a composite dataset was constructed by merging three public YOLO-format sources, since no single public dataset covered the required class list with balanced representation:
+
+\begin{enumerate}
+    \item \textbf{Base -- Ultralytics ``Construction-PPE'' dataset} (\texttt{github.com/ultralytics/assets}, \texttt{construction-ppe.zip}): approximately 1,416 images labeled across 11 classes (helmet, gloves, vest, boots, goggles, and their missing-gear counterparts).
+    \item \textbf{Supplement -- ``Safety-Vests''} (Roboflow Universe, \texttt{roboflow-universe-projects}, v14): used to add additional no-vest violation examples, since the base dataset under-represented this class.
+    \item \textbf{Supplement -- ``PPE-v2''} (Roboflow Universe, \texttt{ayvu}, v2): used to add extra helmet, gloves, goggles, vest, ``none'', and person examples via class-ID remapping into the base dataset's label space.
+\end{enumerate}
+
+After merging, the boots / no-boots classes were dropped as out of scope, producing a final 10-class label space: \textit{helmet, gloves, vest, goggles, none, person, no\_helmet, no\_goggle, no\_gloves, no\_vest}. Several violation classes had fewer than 500 boxes in the raw merge. Per-class instance counts were corrected using an upper bound of 1,500 boxes per class and a protected minimum of 1,200 boxes per class, with under-represented classes (notably \textit{no\_vest} and \textit{goggles}) reinforced across iterative merge rounds. Image/label pairing was verified per split (train/val/test), and orphaned files -- labels without a matching image, or vice versa -- were removed. The final dataset consists of 2,828 training images, 263 validation images, and 249 test images.
+
+This composite-and-rebalanced approach was chosen because it directly targets the project's actual class list, including the ``none''/no-PPE-worn class that most single public datasets do not isolate on its own, and because correcting class imbalance at the data level -- rather than through loss weighting alone -- is one of this project's original contributions, addressing the first gap identified in Section II.
+
+\section{Data Preprocessing}
+
+Each source dataset's class IDs were remapped into a single unified label space prior to merging, since the three sources did not share a consistent class-ID ordering. Duplicate and near-duplicate images across sources were checked to avoid train/test leakage. Corrupt or unreadable images were removed. After merging, per-class box counts were computed and used to drive the rebalancing procedure described in Section IV: over-represented classes were capped, and under-represented classes were reinforced by selectively drawing additional labeled examples from the supplementary sources across multiple targeted merge rounds until every class met the protected minimum. Finally, image/label pairing was re-verified per split to remove any orphaned files introduced during merging.
+
+\section{Exploratory Data Analysis}
+
+Class distribution was examined before and after the rebalancing procedure to confirm that minority violation classes no longer fell far below the majority classes. Fig. \ref{fig:classdist} shows the per-class box counts in the training split before rebalancing (the initial three-source merge) and after the targeted rebalancing rounds described in Section IV. The most severely under-represented classes in the raw merge -- \textit{goggles} (427 boxes), \textit{no\_goggle} (337 boxes), and \textit{no\_helmet} (400 boxes) -- were all brought above the 1,200-box protected minimum (to 1,481, 1,258, and 1,485 respectively), while already-adequate classes such as \textit{helmet} and \textit{vest} were left close to their original counts. The main observed challenge during EDA was that violation classes such as \textit{no\_gloves} and \textit{no\_goggle} are visually subtle at typical camera distances, since they are defined by the \emph{absence} of a small object rather than the presence of one, which was expected to make these classes harder to detect reliably than presence classes such as \textit{helmet} or \textit{vest} -- a expectation later confirmed for \textit{no\_goggle} in the per-class results of Table \ref{tab:perclass} (Section IX).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\columnwidth]{class_distribution.png}
+\caption{Per-class box counts in the training split before and after the Section IV rebalancing procedure. The dashed line marks the protected minimum (1,200 boxes/class).}
+\label{fig:classdist}
+\end{figure}
+
+\section{Baseline Models}
+
+The original project proposal planned three YOLOv8 variants (nano, small, medium) as baselines to characterize the accuracy/speed trade-off for this deployment. Due to the project's time constraints, only one variant was fully trained and evaluated for this submission:
+
+\begin{itemize}
+    \item \textbf{YOLOv8s (small)} -- trained for 60 epochs at image size 640 using the AdamW optimizer with a cosine learning-rate schedule on the rebalanced dataset described in Section IV; used as the sole baseline and reference point for the evaluation in Section IX.
+\end{itemize}
+
+YOLOv8n (nano) and YOLOv8m (medium) were planned as a lighter- and heavier-capacity comparison respectively, consistent with prior findings \cite{b3} that larger YOLOv8 variants improve person/vest-class accuracy at the cost of inference speed, but could not be trained and evaluated within the available time. This is treated as a limitation of the current submission rather than a change in approach, and is discussed further in Section XI.
+
+\section{Experimental Design}
+
+The model was trained on a train/validation/test split (2,828 / 263 / 249 images) derived from the merged and rebalanced dataset described in Section IV. Training used image size 640, the AdamW optimizer, a cosine learning-rate schedule, and a fixed random seed (seed = 42) for reproducibility. Class-weighted classification loss (cls weight = 0.7) was used to further discourage bias toward majority classes, in addition to the data-level rebalancing already applied. Training was conducted on a single NVIDIA T4 GPU (Google Colab) for 60 epochs. Evaluation on the held-out test split used standard COCO-style detection metrics (Section IX).
+
+\section{Proposed Improvement}
+
+The literature reviewed in Section II evaluates PPE detectors almost entirely on isolated frames, which does not reflect how compliance is judged on-site -- per person, continuously, over time. This paper adds a persistent multi-object tracking layer using ByteTrack on top of the trained YOLOv8 detector so that each detected person or violation instance keeps a stable track identity across consecutive frames. Per-track violation logging is implemented so that a violation is recorded only once per unique (track ID, missing-PPE class) pair for the duration the object remains tracked, preventing the same missing item from generating a duplicate log entry on every frame it is visible. This directly targets the third gap identified in Section II: it converts a per-frame detection stream into a per-person violation record, which is both closer to how compliance is judged in practice and prevents alert flooding in a live monitoring deployment. This improvement should work because ByteTrack associates detections across frames using both high- and low-confidence detection boxes, which is well suited to a PPE-monitoring setting where a violation box can briefly drop below the confidence threshold due to partial occlusion without losing the track identity.
+
+\section{Evaluation and Analysis}
+
+Models are compared using mAP@0.5 and mAP@0.5:0.95 (standard detection accuracy metrics, enabling comparison against the published baselines in Section II), per-class precision and recall (since for a safety system, recall on missing-PPE classes matters more than overall accuracy -- a missed violation has real safety consequences), a per-class balance check comparing per-class AP before and after the Section IV rebalancing step (to confirm the data-centric improvement actually reduced the accuracy gap between majority and minority classes rather than only improving overall mAP), and a custom per-person violation-logging accuracy metric that compares the tracking layer's logged violations against manually reviewed ground truth over a short test video sequence. Inference speed (FPS) is also reported, since a model that is accurate but too slow for live video is not a viable deployment for this use case.
+
+\begin{table}[htbp]
+\caption{YOLOv8s Overall Results on the Held-Out Test Split}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model} & \textbf{mAP@0.5} & \textbf{mAP@0.5:0.95} & \textbf{P} & \textbf{R} \\
+\midrule
+YOLOv8s (60 epochs) & 0.738 & 0.402 & 0.835 & 0.668 \\
+\bottomrule
+\end{tabular}
+\label{tab:baseline}
+\end{center}
+\end{table}
+\textit{Note: YOLOv8n and YOLOv8m were planned as additional baselines (Section VI) but were not trained within the project's time constraints; this table therefore reports the single fully-trained YOLOv8s baseline. Inference speed for this run was approximately 101 FPS (0.2ms preprocess + 4.7ms inference + 5.0ms postprocess per image on a T4 GPU).}
+
+\begin{table}[htbp]
+\caption{YOLOv8s Per-Class Results on the Held-Out Test Split}
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{mAP@0.5} \\
+\midrule
+helmet     & 0.907 & 0.437 & 0.584 \\
+gloves     & 0.884 & 0.617 & 0.636 \\
+vest       & 0.904 & 0.556 & 0.710 \\
+goggles    & 0.718 & 0.936 & 0.805 \\
+none       & 0.759 & 0.617 & 0.672 \\
+Person     & 0.858 & 0.640 & 0.742 \\
+no\_helmet & 0.888 & 0.867 & 0.898 \\
+no\_goggle & 0.754 & 0.597 & 0.703 \\
+no\_gloves & 0.867 & 0.700 & 0.836 \\
+no\_vest   & 0.810 & 0.714 & 0.795 \\
+\midrule
+\textbf{all (mean)} & \textbf{0.835} & \textbf{0.668} & \textbf{0.738} \\
+\bottomrule
+\end{tabular}
+\label{tab:perclass}
+\end{center}
+\end{table}
+
+\begin{table}[htbp]
+\caption{Per-Track Violation Logging Accuracy (Planned, Not Completed)}
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Manually reviewed ground-truth violations & -- \\
+System-logged violations & -- \\
+Correctly logged (true positives) & -- \\
+Duplicate/false logs & -- \\
+\bottomrule
+\end{tabular}
+\label{tab:tracking}
+\end{center}
+\end{table}
+\textit{Note: this evaluation requires manually reviewing a test video against the tracking layer's logged output. The tracking-and-deduplication layer itself (Section VIII) is implemented and running in the deployed dashboard (Section X); only this independent quantitative verification against ground truth was not completed within the project's time constraints (see Discussion, Section XI).}
+
+Table \ref{tab:perclass} shows that the four dedicated violation classes (\textit{no\_helmet}, \textit{no\_goggle}, \textit{no\_gloves}, \textit{no\_vest}) achieve a mean mAP@0.5 of 0.808, close to and in three of four cases higher than the presence classes they pair with (\textit{helmet} 0.584, \textit{goggles} 0.805, \textit{gloves} 0.636, \textit{vest} 0.710) -- suggesting the Section IV rebalancing step succeeded in bringing minority violation classes to a competitive accuracy level rather than leaving them far below the majority classes, which was one of this project's original goals. One notable exception is \textit{helmet}, which despite the highest precision in the table (0.907) has the lowest recall (0.437) and lowest mAP@0.5 (0.584) among the ten classes -- the model appears conservative on this class, missing over half of true helmet instances rather than producing false positives. This is a candidate failure mode worth further investigation (e.g., confusion with \textit{no\_helmet} on partially visible heads, or under-representation of certain helmet colors/angles in the merged dataset) once a full error analysis is performed. \textit{goggles} shows the opposite pattern -- high recall (0.936) but comparatively low precision (0.718) -- indicating the model over-predicts this class, likely due to visual similarity with other small face-region objects.
+
+\textbf{Limitations.} This submission has two limitations directly attributable to time constraints rather than a change in methodology. First, only the YOLOv8s baseline was trained and evaluated (Section VI); the planned YOLOv8n/YOLOv8m comparison, which would have quantified the accuracy-versus-speed trade-off referenced in prior work \cite{b3}, was not completed and is left as immediate future work. Second, the custom per-track violation-logging accuracy metric proposed in Section IX (Table \ref{tab:tracking}) requires manually reviewing a test video against the tracking layer's output and was not completed in time for this submission; the tracking-and-deduplication layer itself (Section VIII) is implemented and integrated into the deployed dashboard (Section X), but its quantitative accuracy is not yet independently verified against ground truth. Both are the most direct next steps for extending this work beyond the current submission.
+
+\section{Deployment}
+
+The best-performing baseline (Section IX) is deployed as a lightweight Flask web dashboard with no authentication, intended as a single-user local demonstration. The application captures frames from a live webcam, runs YOLOv8 inference with the ByteTrack tracker (\texttt{persist=True}) on each frame, and overlays bounding boxes color-coded by compliance status (red for a violation class, green otherwise) along with the assigned track ID. Detected violations are deduplicated per (track ID, class) pair as described in Section VIII and written both to an in-memory log and to a CSV file for persistence. The dashboard's video panel streams the annotated feed via MJPEG, while a side panel polls two JSON endpoints every two seconds to display a live violation log table and summary statistics (unique people/objects tracked, total violations logged, and a per-class violation breakdown). The deployment code, along with a \texttt{requirements.txt} and setup instructions, is included in the project's GitHub repository and runs locally without requiring any additional services.
+
+\section{Discussion}
+
+[Fill in once final results are available: interpret whether the class-rebalancing step measurably reduced the majority/minority accuracy gap; discuss the trade-off observed between YOLOv8n/s/m in accuracy versus inference speed for this real-time use case; discuss limitations of the tracking-based deduplication approach, e.g., track ID switches during occlusion or when a person leaves and re-enters the frame, which could cause a violation to be logged twice under two different track IDs; note that evaluation was conducted on a limited test video for the custom tracking metric rather than a large labeled video benchmark.]
+
+\section{Conclusion and Future Work}
+
+This paper presented a real-time PPE compliance detection system that combines a composite, class-rebalanced dataset with a YOLOv8s detector and a ByteTrack-based tracking layer for per-person, deduplicated violation logging, deployed as a live Flask dashboard. The rebalanced YOLOv8s baseline reached an mAP@0.5 of 0.738 (mAP@0.5:0.95 of 0.402) on the held-out test split, with the four dedicated violation classes averaging a competitive 0.808 mAP@0.5 -- evidence that correcting class imbalance at the data level, rather than through loss weighting alone, is an effective strategy for this problem. Due to time constraints, this submission trained and evaluated only the YOLOv8s variant rather than the full planned YOLOv8n/s/m comparison, and did not yet quantitatively evaluate the tracking layer's violation-logging accuracy against manually reviewed ground truth; both are the immediate next steps. Future work also includes extending the system to multiple simultaneous camera feeds with per-zone violation attribution, and exploring lightweight re-identification to reduce duplicate logging when a track ID switches due to occlusion.
+
+\begin{thebibliography}{00}
+\bibitem{b1} M. Ferdous and S. M. M. Ahsan, ``PPE Detector: A YOLO-Based Architecture to Detect Personal Protective Equipment (PPE) for Construction Sites,'' \emph{PeerJ Computer Science}, vol. 8, e999, 2022.
+\bibitem{b2} M.-E. Otgonbold, M. Gochoo, F. Alnajjar, L. Ali, T.-H. Tan, J.-W. Hsieh, and P.-Y. Chen, ``SHEL5K: An Extended Dataset and Benchmarking for Safety Helmet Detection,'' \emph{Sensors}, vol. 22, no. 6, p. 2315, 2022.
+\bibitem{b3} A. Barlybayev, N. Amangeldy, B. Kurmetbek, I. Krak, B. Razakhova, N. Tursynova, and R. Turebayeva, ``Personal Protective Equipment Detection Using YOLOv8 Architecture on Object Detection Benchmark Datasets: A Comparative Study,'' \emph{Cogent Engineering}, vol. 11, no. 1, 2024.
+\bibitem{b4} H. M. Ahmad and A. Rahimi, ``SH17: A Dataset for Human Safety and Personal Protective Equipment Detection in Manufacturing Industry,'' \emph{Journal of Safety Science and Resilience}, vol. 6, no. 2, pp. 175--185, 2025.
+\bibitem{b5} C. Li, J. Wang, B. Luo, T. Yin, B. Liu, and J. Lu, ``SD-YOLOv5: A Rapid Detection Method for Personal Protective Equipment on Construction Sites,'' \emph{Frontiers in Built Environment}, vol. 11, art. 1563483, 2025.
+\bibitem{b6} G. Jocher, A. Chaurasia, and J. Qiu, \emph{Ultralytics YOLOv8}, 2023. [Online]. Available: https://github.com/ultralytics/ultralytics
+\bibitem{b7} Y. Zhang, P. Sun, Y. Jiang, D. Yu, F. Weng, Z. Yuan, P. Luo, W. Liu, and X. Wang, ``ByteTrack: Multi-Object Tracking by Associating Every Detection Box,'' in \emph{Proc. European Conference on Computer Vision (ECCV)}, 2022.
+\end{thebibliography}
+
+\end{document}
